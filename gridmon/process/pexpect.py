@@ -77,7 +77,7 @@ try:
     import errno
     import traceback
     import signal
-except ImportError, e:
+except ImportError as e:
     raise ImportError (str(e) + """
 A critical module was not found. Probably this operating system does not support it.
 Pexpect is intended for UNIX-like operating systems.""")
@@ -100,7 +100,7 @@ class ExceptionPexpect(Exception):
         In other words, the stack trace inside the Pexpect module is not included.
         """
         tblist = traceback.extract_tb(sys.exc_info()[2])
-        tblist = filter(self.__filter_not_pexpect, tblist)
+        tblist = list(filter(self.__filter_not_pexpect, tblist))
         tblist = traceback.format_list(tblist)
         return ''.join(tblist)
     def __filter_not_pexpect(self, trace_list_item):
@@ -188,8 +188,8 @@ def run (command, timeout=-1, withexitstatus=False, events=None, extra_args=None
     else:
         child = spawn(command, timeout=timeout, maxread=2000, logfile=logfile)
     if events is not None:
-        patterns = events.keys()
-        responses = events.values()
+        patterns = list(events.keys())
+        responses = list(events.values())
     else:
         patterns=None # We assume that EOF or TIMEOUT will save us.
         responses=None
@@ -198,26 +198,26 @@ def run (command, timeout=-1, withexitstatus=False, events=None, extra_args=None
     while 1:
         try:
             index = child.expect (patterns)
-            if type(child.after) is types.StringType:
+            if type(child.after) is bytes:
                 child_result_list.append(child.before + child.after)
             else: # child.after may have been a TIMEOUT or EOF, so don't cat those.
                 child_result_list.append(child.before)
-            if type(responses[index]) is types.StringType:
+            if type(responses[index]) is bytes:
                 child.send(responses[index])
             elif type(responses[index]) is types.FunctionType:
                 callback_result = responses[index](locals())
                 sys.stdout.flush()
-                if type(callback_result) is types.StringType:
+                if type(callback_result) is bytes:
                     child.send(callback_result)
                 elif callback_result:
                     break
             else:
                 raise TypeError ('The callback must be a string or function type.')
             event_count = event_count + 1
-        except TIMEOUT, e:
+        except TIMEOUT as e:
             child_result_list.append(child.before)
             break
-        except EOF, e:
+        except EOF as e:
             child_result_list.append(child.before)
             break
     child_result = ''.join(child_result_list)
@@ -442,7 +442,7 @@ class spawn (object):
         if self.use_native_pty_fork:
             try:
                 self.pid, self.child_fd = pty.fork()
-            except OSError, e:
+            except OSError as e:
                 raise ExceptionPexpect('Error! pty.fork() failed: ' + str(e))
         else: # Use internal __fork_pty
             self.pid, self.child_fd = self.__fork_pty() 
@@ -492,11 +492,11 @@ class spawn (object):
         """
         parent_fd, child_fd = os.openpty()
         if parent_fd < 0 or child_fd < 0:
-            raise ExceptionPexpect, "Error! Could not open pty with os.openpty()."
+            raise ExceptionPexpect("Error! Could not open pty with os.openpty().")
         
         pid = os.fork()
         if pid < 0:
-            raise ExceptionPexpect, "Error! Failed os.fork()."
+            raise ExceptionPexpect("Error! Failed os.fork().")
         elif pid == 0:
             # Child.
             os.close(parent_fd)
@@ -533,7 +533,7 @@ class spawn (object):
             fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY);
             if fd >= 0:
                 os.close(fd)
-                raise ExceptionPexpect, "Error! We are not disconnected from a controlling tty."
+                raise ExceptionPexpect("Error! We are not disconnected from a controlling tty.")
         except:
             # Good! We are disconnected from a controlling tty.
             pass
@@ -541,14 +541,14 @@ class spawn (object):
         # Verify we can open child pty.
         fd = os.open(child_name, os.O_RDWR);
         if fd < 0:
-            raise ExceptionPexpect, "Error! Could not open child pty, " + child_name
+            raise ExceptionPexpect("Error! Could not open child pty, " + child_name)
         else:
             os.close(fd)
 
         # Verify we now have a controlling tty.
         fd = os.open("/dev/tty", os.O_WRONLY)
         if fd < 0:
-            raise ExceptionPexpect, "Error! Could not open controlling tty, /dev/tty"
+            raise ExceptionPexpect("Error! Could not open controlling tty, /dev/tty")
         else:
             os.close(fd)
          
@@ -680,7 +680,7 @@ class spawn (object):
         if self.child_fd in r:
             try:
                 s = os.read(self.child_fd, size)
-            except OSError, e: # Linux does this
+            except OSError as e: # Linux does this
                 self.flag_eof = True
                 raise EOF ('End Of File (EOF) in read_nonblocking(). Exception style platform.')
             if s == '': # BSD style
@@ -746,7 +746,7 @@ class spawn (object):
         """
         return self
 
-    def next (self):    # File-like object.
+    def __next__ (self):    # File-like object.
         """This is to support iterators over a file-like object.
         """
         result = self.readline()
@@ -909,7 +909,7 @@ class spawn (object):
             
         try:
             pid, status = os.waitpid(self.pid, waitpid_options)
-        except OSError, e: # No child processes
+        except OSError as e: # No child processes
             if e[0] == errno.ECHILD:
                 raise ExceptionPexpect ('isalive() encountered condition where "terminated" is 0, but there was no child process. Did someone else call waitpid() on our process?')
             else:
@@ -921,7 +921,7 @@ class spawn (object):
         if pid == 0:
             try:
                 pid, status = os.waitpid(self.pid, waitpid_options) ### os.WNOHANG) # Solaris!
-            except OSError, e: # This should never happen...
+            except OSError as e: # This should never happen...
                 if e[0] == errno.ECHILD:
                     raise ExceptionPexpect ('isalive() encountered condition that should never happen. There was no child process. Did someone else call waitpid() on our process?')
                 else:
@@ -983,7 +983,7 @@ class spawn (object):
         """
         if patterns is None:
             return []
-        if type(patterns) is not types.ListType:
+        if type(patterns) is not list:
             patterns = [patterns]
 
         compile_flags = re.DOTALL # Allow dot to match \n
@@ -991,7 +991,7 @@ class spawn (object):
             compile_flags = compile_flags | re.IGNORECASE
         compiled_pattern_list = []
         for p in patterns:
-            if type(p) is types.StringType:
+            if type(p) is bytes:
                 compiled_pattern_list.append(re.compile(p, compile_flags))
             elif p is EOF:
                 compiled_pattern_list.append(EOF)
@@ -1118,7 +1118,7 @@ class spawn (object):
                 incoming = incoming + c
                 if timeout is not None:
                     timeout = end_time - time.time()
-        except EOF, e:
+        except EOF as e:
             self.buffer = ''
             self.before = incoming
             self.after = EOF
@@ -1130,7 +1130,7 @@ class spawn (object):
                 self.match = None
                 self.match_index = None
                 raise EOF (str(e) + '\n' + str(self))
-        except TIMEOUT, e:
+        except TIMEOUT as e:
             self.before = incoming
             self.after = TIMEOUT
             if TIMEOUT in pattern_list:
@@ -1155,7 +1155,7 @@ class spawn (object):
         if 'TIOCGWINSZ' in dir(termios):
             TIOCGWINSZ = termios.TIOCGWINSZ
         else:
-            TIOCGWINSZ = 1074295912L # assume if not defined
+            TIOCGWINSZ = 1074295912 # assume if not defined
         s = struct.pack('HHHH', 0, 0, 0, 0)
         x = fcntl.ioctl(self.fileno(), TIOCGWINSZ, s)
         return struct.unpack('HHHH', x)[0:2]
@@ -1179,7 +1179,7 @@ class spawn (object):
             TIOCSWINSZ = termios.TIOCSWINSZ
         else:
             TIOCSWINSZ = -2146929561
-        if TIOCSWINSZ == 2148037735L: # L is not required in Python >= 2.2.
+        if TIOCSWINSZ == 2148037735: # L is not required in Python >= 2.2.
             TIOCSWINSZ = -2146929561 # Same bits, but with sign.
         # Note, assume ws_xpixel and ws_ypixel are zero.
         s = struct.pack('HHHH', r, c, 0, 0)
@@ -1273,7 +1273,7 @@ class spawn (object):
         while True:
             try:
                 return select.select (iwtd, owtd, ewtd, timeout)
-            except select.error, e:
+            except select.error as e:
                 if e[0] == errno.EINTR:
                     # if we loop back we have to subtract the amount of time we already waited.
                     if timeout is not None:
@@ -1320,7 +1320,7 @@ def which (filename):
         if os.access (filename, os.X_OK):
             return filename
 
-    if not os.environ.has_key('PATH') or os.environ['PATH'] == '':
+    if 'PATH' not in os.environ or os.environ['PATH'] == '':
         p = os.defpath
     else:
         p = os.environ['PATH']
